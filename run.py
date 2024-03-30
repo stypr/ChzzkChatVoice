@@ -1,193 +1,217 @@
+#!/usr/bin/python -u
+# -*- coding: utf-8 -*-
+
 import argparse
 import datetime
 import logging
 import json
 import api
+import os
+import pygame
 
+from gtts import gTTS
 from websocket import WebSocket
 from cmd_type import CHZZK_CHAT_CMD
-
 
 class ChzzkChat:
 
     def __init__(self, streamer, cookies, logger):
 
         self.streamer = streamer
-        self.cookies  = cookies
-        self.logger   = logger
+        self.cookies = cookies
+        self.logger = logger
 
-        self.sid           = None
-        self.userIdHash    = api.fetch_userIdHash(self.cookies)
+        self.sid = None
+        self.userIdHash = api.fetch_userIdHash(self.cookies)
         self.chatChannelId = api.fetch_chatChannelId(self.streamer)
-        self.channelName   = api.fetch_channelName(self.streamer)
+        self.channelName = api.fetch_channelName(self.streamer)
         self.accessToken, self.extraToken = api.fetch_accessToken(self.chatChannelId, self.cookies)
 
         self.connect()
 
-
     def connect(self):
 
         self.chatChannelId = api.fetch_chatChannelId(self.streamer)
-        self.accessToken, self.extraToken = api.fetch_accessToken(self.chatChannelId, self.cookies)
+        self.accessToken, self.extraToken = api.fetch_accessToken(
+            self.chatChannelId, self.cookies
+        )
 
         sock = WebSocket()
-        sock.connect('wss://kr-ss1.chat.naver.com/chat')
-        print(f'{self.channelName} 채팅창에 연결 중 .', end="")
+        sock.connect("wss://kr-ss1.chat.naver.com/chat")
+        print(f"{self.channelName} 채팅창에 연결 중 .", end="")
 
-        default_dict = {  
-            "ver"   : "2",
-            "svcid" : "game",
-            "cid"   : self.chatChannelId,
+        default_dict = {
+            "ver": "2",
+            "svcid": "game",
+            "cid": self.chatChannelId,
         }
 
         send_dict = {
-            "cmd"   : CHZZK_CHAT_CMD['connect'],
-            "tid"   : 1,
-            "bdy"   : {
-                "uid"     : self.userIdHash,
-                "devType" : 2001,
-                "accTkn"  : self.accessToken,
-                "auth"    : "SEND"
-            }
+            "cmd": CHZZK_CHAT_CMD["connect"],
+            "tid": 1,
+            "bdy": {
+                "uid": self.userIdHash,
+                "devType": 2001,
+                "accTkn": self.accessToken,
+                "auth": "READ",
+            },
         }
 
+        # print(json.dumps(dict(send_dict, **default_dict), indent=4))
         sock.send(json.dumps(dict(send_dict, **default_dict)))
         sock_response = json.loads(sock.recv())
-        self.sid = sock_response['bdy']['sid']
-        print(f'\r{self.channelName} 채팅창에 연결 중 ..', end="")
+        self.sid = sock_response["bdy"]["sid"]
+        print(f"\r{self.channelName} 채팅창에 연결 중 ..", end="")
 
         send_dict = {
-            "cmd"   : CHZZK_CHAT_CMD['request_recent_chat'],
-            "tid"   : 2,
-            
-            "sid"   : self.sid,
-            "bdy"   : {
-                "recentMessageCount" : 50
-            }
+            "cmd": CHZZK_CHAT_CMD["request_recent_chat"],
+            "tid": 2,
+            "sid": self.sid,
+            "bdy": {"recentMessageCount": 50},
         }
 
         sock.send(json.dumps(dict(send_dict, **default_dict)))
         sock.recv()
-        print(f'\r{self.channelName} 채팅창에 연결 중 ...')
+        print(f"\r{self.channelName} 채팅창에 연결 중 ...")
 
         self.sock = sock
         if self.sock.connected:
-            print('연결 완료')
+            print("연결 완료")
         else:
-            raise ValueError('오류 발생')
-        
+            raise ValueError("오류 발생")
 
-    def send(self, message:str):
+    def send(self, message: str):
 
-        default_dict = {  
-            "ver"   : 2,
-            "svcid" : "game",
-            "cid"   : self.chatChannelId,
+        default_dict = {
+            "ver": 2,
+            "svcid": "game",
+            "cid": self.chatChannelId,
         }
 
         extras = {
-            "chatType"          : "STREAMING",
-            "emojis"            : "",
-            "osType"            : "PC",
-            "extraToken"        : self.extraToken,
-            "streamingChannelId": self.chatChannelId
+            "chatType": "STREAMING",
+            "emojis": "",
+            "osType": "PC",
+            "extraToken": self.extraToken,
+            "streamingChannelId": self.chatChannelId,
         }
 
         send_dict = {
-            "tid"   : 3,
-            "cmd"   : CHZZK_CHAT_CMD['send_chat'],
-            "retry" : False,
-            "sid"   : self.sid,
-            "bdy"   : {
-                "msg"           : message,
-                "msgTypeCode"   : 1,
-                "extras"        : json.dumps(extras),
-                "msgTime"       : int(datetime.datetime.now().timestamp())
-            }
+            "tid": 3,
+            "cmd": CHZZK_CHAT_CMD["send_chat"],
+            "retry": False,
+            "sid": self.sid,
+            "bdy": {
+                "msg": message,
+                "msgTypeCode": 1,
+                "extras": json.dumps(extras),
+                "msgTime": int(datetime.datetime.now().timestamp()),
+            },
         }
 
         self.sock.send(json.dumps(dict(send_dict, **default_dict)))
 
+    def play_tts(self, message, language, filename="tts.mp3"):
+        if "http://" in message or "https://" in message:
+            return
+
+        # print("Play TTS")
+
+        sound_filename = f"test.mp3"
+        tts = gTTS(text=message, lang=language)
+        tts.save(sound_filename)
+        # print("Init TTS")
+        pygame.mixer.init()
+        pygame.mixer.music.load(sound_filename)
+        pygame.mixer.music.play()
+        clock = pygame.time.Clock()
+        while pygame.mixer.music.get_busy():
+            clock.tick(1)
+        # print("Unloading...")
+        pygame.mixer.music.stop()
+        pygame.mixer.music.unload()
+        pygame.mixer.quit()
+        # print("Removing...")
+        os.remove(sound_filename)
 
     def run(self):
 
         while True:
 
             try:
-        
+
                 try:
                     raw_message = self.sock.recv()
 
                 except KeyboardInterrupt:
-                    break 
+                    break
 
-                except:
+                except Exception as e:
+                    print(e)
                     self.connect()
                     raw_message = self.sock.recv()
 
                 raw_message = json.loads(raw_message)
-                chat_cmd    = raw_message['cmd']
-                
-                if chat_cmd == CHZZK_CHAT_CMD['ping']:
+                chat_cmd = raw_message["cmd"]
 
+                if chat_cmd == CHZZK_CHAT_CMD["ping"]:
                     self.sock.send(
-                        json.dumps({
-                            "ver" : "2",
-                            "cmd" : CHZZK_CHAT_CMD['pong']
-                        })
+                        json.dumps({"ver": "2", "cmd": CHZZK_CHAT_CMD["pong"]})
                     )
 
-                    if self.chatChannelId != api.fetch_chatChannelId(self.streamer): # 방송 시작시 chatChannelId가 달라지는 문제
+                    if self.chatChannelId != api.fetch_chatChannelId(
+                        self.streamer
+                    ):  # 방송 시작시 chatChannelId가 달라지는 문제
                         self.connect()
 
                     continue
-                
-                if chat_cmd == CHZZK_CHAT_CMD['chat']:
-                    chat_type = '채팅'
 
-                elif chat_cmd == CHZZK_CHAT_CMD['donation']:
-                    chat_type = '후원'
+                if chat_cmd == CHZZK_CHAT_CMD["chat"]:
+                    chat_type = "채팅"
+
+                elif chat_cmd == CHZZK_CHAT_CMD["donation"]:
+                    chat_type = "후원"
 
                 else:
                     continue
 
-                for chat_data in raw_message['bdy']:
-                    
-                    if chat_data['uid'] == 'anonymous':
-                        nickname = '익명의 후원자'
+                for chat_data in raw_message["bdy"]:
+
+                    if chat_data["uid"] == "anonymous":
+                        nickname = "익명의 후원자"
 
                     else:
-                        
                         try:
-                            profile_data = json.loads(chat_data['profile'])
+                            profile_data = json.loads(chat_data["profile"])
                             nickname = profile_data["nickname"]
-
-                            if 'msg' not in chat_data:
+                            if "msg" not in chat_data:
                                 continue
 
                         except:
                             continue
 
-                    now = datetime.datetime.fromtimestamp(chat_data['msgTime']/1000)
-                    now = datetime.datetime.strftime(now, '%Y-%m-%d %H:%M:%S')
+                    now = datetime.datetime.fromtimestamp(chat_data["msgTime"] / 1000)
+                    now = datetime.datetime.strftime(now, "%Y-%m-%d %H:%M:%S")
 
                     self.logger.info(f'[{now}][{chat_type}] {nickname} : {chat_data["msg"]}')
-                
+                    self.play_tts(
+                        message=chat_data["msg"],
+                        language="ko"
+                    )
+
             except:
                 pass
-            
 
 def get_logger():
-
-    formatter = logging.Formatter('%(message)s')
+    formatter = logging.Formatter("%(message)s")
 
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
-    file_handler = logging.FileHandler('chat.log', mode = "w")
+    file_handler = logging.FileHandler("chat.log", mode="w")
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-    
+
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
@@ -195,21 +219,22 @@ def get_logger():
     return logger
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--streamer_id', type=str, default='9381e7d6816e6d915a44a13c0195b202')
+    parser.add_argument("--streamer_id", type=str, default="479126c03d01dcad3e8348f2d491a5b3")
     args = parser.parse_args()
-
-    with open('cookies.json') as f:
-        cookies = json.load(f)
-
     logger = get_logger()
-    chzzkchat = ChzzkChat(args.streamer_id, cookies, logger)
 
-    # 채팅창으로 메세지 보내기
-    # mesaage = ' '
-    # chzzkchat.send(message=mesaage)
+    try:
+        with open("cookies.json", encoding="utf-8") as f:
+            cookies = json.load(f)
+    except Exception as e:
+        cookies = {}
+        logger.error(f"[COOKIE] {str(e)}")
+
+
+    chzzkchat = ChzzkChat(args.streamer_id, cookies, logger)
 
     # 채팅 크롤링
     chzzkchat.run()
