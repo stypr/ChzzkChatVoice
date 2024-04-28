@@ -52,7 +52,7 @@ class ChzzkChat:
     def init_logger(self, filename: str = "chat.log"):
         formatter = logging.Formatter("[%(asctime)s][%(levelname)s]%(message)s")
         logger = logging.getLogger()
-        logger.setLevel(logging.DEBUG) # logging.DEBUG
+        logger.setLevel(logging.INFO) # logging.DEBUG
         file_handler = logging.FileHandler(filename, mode="a+")
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
@@ -143,13 +143,14 @@ class ChzzkChat:
             thread_send.start()
             thread_recv.start()
 
-            while thread_send.is_alive() or thread_recv.is_alive(): 
+            while thread_send.is_alive():
                 thread_send.join(1)
+            while thread_recv.is_alive():
                 thread_recv.join(1)
 
         except (KeyboardInterrupt, SystemExit):
             self.terminate = True
-            self.logger.info("[ChzzkChat.run] KeyboardInterrupt")
+            self.logger.info("[ChzzkChat.run] KeyboardInterrupt, Gracefully shutting down...")
 
 
     def recv_handler(self):
@@ -162,10 +163,10 @@ class ChzzkChat:
             except Exception as exc:
                 self.logger.error("[ChzzkChat.recv_handler] Exception: %s", exc)
                 self.connect()
-            
+
             finally:
                 if self.terminate:
-                    break
+                    return
 
 
     def send_handler(self):
@@ -182,11 +183,11 @@ class ChzzkChat:
                 i = 0
                 while i < 20:
                     if self.terminate:
-                        break
+                        return
                     time.sleep(1)
                     i += 1
                 if self.terminate:
-                    break
+                    return
 
 
     def process_response(self, raw_message: str):
