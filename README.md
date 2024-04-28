@@ -1,17 +1,17 @@
-# Chzzk Chat Crawler
+# Chzzk Chat Voice 
 
 <img src="figure/logo.svg" width="400">  
 
 <img src="figure/image.png">  
 
-파이썬을 통해 네이버 치지직 서비스의 채팅을 크롤링 해봅시다.
+파이썬을 통해 네이버 치지직 서비스의 채팅을 크롤링 하여 목소리를 읽어줍니다.
 
 이 코드는 [kimcore](https://github.com/kimcore/chzzk/tree/main)님의 코드를 기반으로 작성하였습니다.
 
 ## 설치
 
     # 코드 다운로드
-    $ git clone https://github.com/Buddha7771/ChzzkChat .
+    $ git clone https://github.dev/stypr/ChzzkChatVoice .
     $ cd ChzzkChat
 
     # 가상환경 설치
